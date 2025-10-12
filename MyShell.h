@@ -20,6 +20,7 @@ public:
 
     void help(int argc, QString argv[MaxCommand]);
     void light(int argc, QString argv[MaxCommand]);
+    void beep(int argc, QString argv[MaxCommand]);
 
 private:
 

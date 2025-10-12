@@ -73,10 +73,17 @@ void VechilcleShell::Shell() {
 
                     this->Mycom.help(argc, argv);
 
-                }
-                if (argv[0] == "light") {
+                } else if (argv[0] == "light") {
 
                     this->Mycom.light(argc, argv);
+
+                } else if (argv[0] == "beep") {
+
+                    this->Mycom.beep(argc, argv);
+
+                } else {
+
+                    out << "Unknow Command" << endl;
 
                 }
 
@@ -90,7 +97,7 @@ void VechilcleShell::Shell() {
 
 // 内建命令的实现
 
-QString CommandList[MaxCommand] = {"help", "light"};
+QString CommandList[MaxCommand] = {"help", "light", "beep"};
 
 InerCommand::InerCommand() {
 
@@ -113,7 +120,6 @@ void InerCommand::help(int argc, QString argv[]) {
             }
 
         }
-
 
     }
 
@@ -144,4 +150,28 @@ void InerCommand::light(int argc, QString *argv) {
 
 }
 
+void InerCommand::beep(int argc, QString *argv) {
+
+    if (argc != 2) {
+
+        out << "woring usage!" << endl;
+        return;
+
+    }
+
+    if (argv[1] == "on") {
+
+        MyHardware.Mbeep->on();
+
+    } else if (argv[1] == "off") {
+
+        MyHardware.Mbeep->off();
+
+    } else if (argv[1] == "status") {
+
+        MyHardware.Mbeep->GetStatus();
+
+    } else out << "did'n has usage: " << argv[1] << endl;
+
+}
 

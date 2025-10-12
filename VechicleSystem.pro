@@ -18,7 +18,7 @@ DEFINES += QT_DEPRECATED_WARNINGS
 SOURCES += \
     Hardware.cpp \
     MyShell.cpp \
-    Page.c \
+    Page.cpp \
     main.cpp \
     mainwindow.cpp
 

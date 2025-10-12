@@ -6,6 +6,7 @@
 #include <QGuiApplication>
 #include <QScreen>
 #include <QRect>
+#include "Page.h"
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -17,6 +18,15 @@ MainWindow::MainWindow(QWidget *parent)
 
     myUiInit();
 
+    myPageTest = new QStackedWidget(this);
+    Home = new HomePage();
+    Map = new MapPage();
+
+    myPageTest->addWidget(Home);
+    myPageTest->addWidget(Map);
+
+    myPageTest->setCurrentIndex(1);
+
     // ui->setupUi(this);
 
 }
@@ -24,8 +34,8 @@ MainWindow::MainWindow(QWidget *parent)
 MainWindow::~MainWindow() {
 
     delete ui;
-}
 
+}
 
 void MainWindow::myUiInit() {
 

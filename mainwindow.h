@@ -5,8 +5,10 @@
 #include <QPushButton>
 #include <QCheckBox>
 #include <QRadioButton>
+#include <QStackedWidget>
 
 #include "MyShell.h"
+#include "Page.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
@@ -29,6 +31,10 @@ private:
     VechilcleShell *shell;
 
     // 创建ui界面
+    QStackedWidget *myPageTest;
+    HomePage *Home;
+    MapPage *Map;
+
     QRadioButton *radioLight;
     QPushButton *pushButton;
 

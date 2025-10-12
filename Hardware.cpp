@@ -95,10 +95,96 @@ int light::off() {
 
 }
 
+// 警报器
+beep::beep() {
+
+    this->file.setFileName("/sys/devices/platform/leds/leds/beep/brightness");
+
+    if (!file.exists()) out << "can't init beep" << endl;
+
+    // 创建文件读取对象
+    filein = new QTextStream(&file);
+
+}
+
+
+int beep::GetStatus() {
+
+    if (!file.exists()) return -1;
+
+    if (!file.open(QIODevice::ReadWrite)) {
+
+        out << file.errorString();
+        this->status = -1;
+        return -1;
+    }
+
+    QString buf = filein->readLine();
+
+    if (buf == "1") {
+
+        this->status = 1;
+
+    } else if (buf == "0") {
+
+        this->status = 0;
+
+    } else {
+
+        // 错误情况
+        this->status = -1;
+
+    }
+    if (this->status != -1) out << "beep status: " << this->status << endl;
+    else out << "beep status get wroing" << endl;
+
+    file.close();
+
+    return this->status;
+
+}
+
+int beep::on() {
+
+    if (!file.exists()) return -1;
+
+    if (!file.open(QIODevice::ReadWrite)) {
+
+        out << file.errorString();
+
+    }
+
+    file.write("1");
+
+    file.close();
+
+    return this->GetStatus();
+
+}
+
+int beep::off() {
+
+    if (!file.exists()) return -1;
+
+    if (!file.open(QIODevice::ReadWrite)) {
+
+        out << file.errorString();
+
+    }
+
+    file.write("0");
+
+    file.close();
+
+    return this->GetStatus();
+
+}
+
 
 // HardWare
 void Hardware::init() {
 
     Mlight = new light();
+    Mbeep = new beep();
 
 }
