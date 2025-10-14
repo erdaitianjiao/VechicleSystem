@@ -3,6 +3,13 @@
 
 #include <QTextStream>
 #include <QFile>
+#include <QSerialPort>
+#include <QSerialPortInfo>
+#include <QMessageBox>
+#include <QDebug>
+#include <QObject>
+#include <QSerialPortInfo>
+#include <QStackedWidget>
 
 // 前照大灯
 class light {
@@ -42,18 +49,40 @@ private:
 
 };
 
+//串口
+class SerialManger : public QObject
+{
+    Q_OBJECT
+public:
+    SerialManger();
+
+    void Serialsenddata(QByteArray &buf);
+    QByteArray Serialgetdata();
+    void SerialgetConfiguration(qint32 &baud, QSerialPort::DataBits &dataBits,
+                                QSerialPort::StopBits &stopBits, QSerialPort::Parity &parity,
+                                QSerialPort::FlowControl &flow);
+
+public:
+    //串口对象
+    QSerialPort *serialPort;
+};
+
+
 // 硬件集合
 class Hardware {
 
 public:
-    void init();
+    void init();            // 用于初始化
 
-    light *Mlight;
-    beep  *Mbeep;
+    light *Mlight;          // 实例化前照灯
+    beep  *Mbeep;           // 实例化警报器
+    SerialManger *smr;      // 实例化Serial
 
 
 };
 
+
+// 全局处理Hardware 在任何地方都可以调用
 extern Hardware MyHardware;
 
 #endif // HARDWARE_H

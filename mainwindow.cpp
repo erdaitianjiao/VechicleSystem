@@ -6,6 +6,7 @@
 #include <QGuiApplication>
 #include <QScreen>
 #include <QRect>
+#include <QDebug>
 #include "Page.h"
 
 MainWindow::MainWindow(QWidget *parent)
@@ -14,18 +15,31 @@ MainWindow::MainWindow(QWidget *parent)
 
     // 初始化shell
     shell = new VechilcleShell();
+
+    // 开启shell线程
     shell->start();
 
+    // 初始化主界面 可删除
     myUiInit();
 
+    // 初始化一个页面容器
     myPageTest = new QStackedWidget(this);
     Home = new HomePage();
     Map = new MapPage();
+    ser = new Serialpage();
+    //setCentralWidget(ser);
 
+    // 将界面添加到页面容器里面
     myPageTest->addWidget(Home);
     myPageTest->addWidget(Map);
+    myPageTest->addWidget(ser);
 
-    myPageTest->setCurrentIndex(0);
+    // 切换界面 可将和按钮绑定
+    myPageTest->setCurrentIndex(2);
+    setCentralWidget(myPageTest);   // 告诉 Qt 用 QStackedWidget 做中央窗体
+
+    connect(ser->btn, SIGNAL(clicked()), this, SLOT(MAIN_home()));
+    //connect(ser, &Serialpage::goHome, this, [this]{setPage(0); });
 
     // ui->setupUi(this);
 
@@ -37,6 +51,14 @@ MainWindow::~MainWindow() {
 
 }
 
+// tewt
+void MainWindow::MAIN_home() {
+
+    myPageTest->setCurrentIndex(0);
+
+}
+
+// 初始化界面 处理arm平台和x86平台
 void MainWindow::myUiInit() {
 
     QList <QScreen *> list_screen = QGuiApplication::screens();
@@ -69,6 +91,7 @@ void MainWindow::myUiInit() {
 
 }
 
+// 开关灯按钮
 void MainWindow::pushButtonClicked() {
 
     if (MyHardware.Mlight->status == 1) MyHardware.Mlight->off();
@@ -76,4 +99,14 @@ void MainWindow::pushButtonClicked() {
 
 }
 
+//页面切换
+void MainWindow::setPage(int idx)
+{
+    myPageTest->setCurrentIndex(idx);
+}
 
+//串口界面返回主界面
+void Serialpage::SerialpagetoMianpage()
+{
+    emit goHome();
+}

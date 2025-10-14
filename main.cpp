@@ -9,10 +9,12 @@
 
 int main(int argc, char *argv[]) {
 
+    // 初始化硬件
     MyHardware.init();
 
     QApplication a(argc, argv);
 
+    // 读取qss文件 后面封装起来
     QFile file(":/style.qss");
 
     if (file.exists()) {
