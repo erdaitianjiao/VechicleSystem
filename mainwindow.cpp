@@ -25,7 +25,7 @@ MainWindow::MainWindow(QWidget *parent)
     myPageTest->addWidget(Home);
     myPageTest->addWidget(Map);
 
-    myPageTest->setCurrentIndex(1);
+    myPageTest->setCurrentIndex(0);
 
     // ui->setupUi(this);
 
