@@ -46,14 +46,16 @@ private:
 class Hardware {
 
 public:
-    void init();
+    void init();            // 用于初始化
 
-    light *Mlight;
-    beep  *Mbeep;
+    light *Mlight;          // 实例化前照灯
+    beep  *Mbeep;           // 实例化警报器
 
 
 };
 
+
+// 全局处理Hardware 在任何地方都可以调用
 extern Hardware MyHardware;
 
 #endif // HARDWARE_H

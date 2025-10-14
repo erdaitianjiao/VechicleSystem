@@ -27,14 +27,17 @@ public:
 private:
     Ui::MainWindow *ui;
 
-    // 创建Shell
+    // 创建Shell 可以通过shell进行page操作
     VechilcleShell *shell;
 
-    // 创建ui界面
+
+    // 创建ui界面 测试用
+    // 创建一个页面容器 用于装页面和切换界面
     QStackedWidget *myPageTest;
     HomePage *Home;
     MapPage *Map;
 
+    // 测试用
     QRadioButton *radioLight;
     QPushButton *pushButton;
 
