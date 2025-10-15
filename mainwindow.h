@@ -36,14 +36,15 @@ private:
     QStackedWidget *myPageTest;
     HomePage *Home;
     MapPage *Map;
+    Ap3216cPage *Ap3216cP;
 
-    // 测试用
-    QRadioButton *radioLight;
-    QPushButton *pushButton;
+//    // 测试用
+//    QRadioButton *radioLight;
+//    QPushButton *pushButton;
 
 
-private slots:
-    void pushButtonClicked();
+//private slots:
+//    void pushButtonClicked();
 
 };
 #endif // MAINWINDOW_H

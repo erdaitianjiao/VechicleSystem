@@ -1,11 +1,202 @@
 #include "Hardware.h"
 #include "MyShell.h"
-
 #include <QString>
-
+#include <QDebug>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
 
 // 硬件类 所有的硬件都封装在这里面 体现程序分层调用
 Hardware MyHardware;
+
+// ==================== AP3216C 传感器实现 ====================
+
+/*
+ *  @ AP3216C构造函数
+ *  初始化定时器和传感器状态
+ */
+Ap3216c::Ap3216c(QObject *parent) : QObject(parent)
+{
+    // 创建数据采集定时器
+    timer = new QTimer();
+
+    // 连接定时器超时信号
+    connect(timer, SIGNAL(timeout()), this, SLOT(timer_timeout()));
+
+    // 初始状态为停止
+    status = 0;
+}
+
+/*
+ *  @ AP3216C析构函数
+ *  停止数据采集并清理资源
+ */
+Ap3216c::~Ap3216c()
+{
+    // 停止数据采集
+    setCapture(false);
+
+    // 释放定时器
+    delete timer;
+}
+
+/*
+ *  @ 获取传感器状态
+ *  返回传感器当前运行状态
+ */
+int Ap3216c::GetStatus()
+{
+    return status;
+}
+
+/*
+ *  @ 定时器超时处理函数
+ *  读取所有传感器数据并发射变化信号
+ */
+void Ap3216c::timer_timeout()
+{
+    // 读取三种传感器数据
+    alsdata = readAlsData();
+    psdata = readPsData();
+    irdata = readIrData();
+
+    // 通知界面更新数据
+    emit ap3216cDataChanged();
+}
+
+/*
+ *  @ 读取红外传感器数据
+ *  通过sysfs接口从硬件读取IR数据
+ */
+QString Ap3216c::readIrData()
+{
+    char const *filename = "/sys/class/misc/ap3216c/ir";
+    int err = 0;
+    int fd;
+    char buf[10];
+
+    // 打开设备文件
+    fd = open(filename, O_RDONLY);
+    if (fd < 0) {
+        close(fd);
+        return "open file error!";
+    }
+
+    // 读取传感器数据
+    err = read(fd, buf, sizeof(buf));
+    if (err < 0) {
+        close(fd);
+        return "read data error!";
+    }
+    close(fd);
+
+    // 处理读取的数据（去除换行符）
+    QString irValue = buf;
+    QStringList list = irValue.split("\n");
+    return list[0];
+}
+
+/*
+ *  @ 读取接近传感器数据
+ *  通过sysfs接口从硬件读取PS数据
+ */
+QString Ap3216c::readPsData()
+{
+    char const *filename = "/sys/class/misc/ap3216c/ps";
+    int err = 0;
+    int fd;
+    char buf[10];
+
+    fd = open(filename, O_RDONLY);
+    if (fd < 0) {
+        close(fd);
+        return "open file error!";
+    }
+
+    err = read(fd, buf, sizeof(buf));
+    if (err < 0) {
+        close(fd);
+        return "read data error!";
+    }
+    close(fd);
+
+    QString psValue = buf;
+    QStringList list = psValue.split("\n");
+    return list[0];
+}
+
+/*
+ *  @ 读取环境光传感器数据
+ *  通过sysfs接口从硬件读取ALS数据
+ */
+QString Ap3216c::readAlsData()
+{
+    char const *filename = "/sys/class/misc/ap3216c/als";
+    int err = 0;
+    int fd;
+    char buf[10];
+
+    fd = open(filename, O_RDONLY);
+    if (fd < 0) {
+        close(fd);
+        return "open file error!";
+    }
+
+    err = read(fd, buf, sizeof(buf));
+    if (err < 0) {
+        close(fd);
+        return "read data error!";
+    }
+    close(fd);
+
+    QString alsValue = buf;
+    QStringList list = alsValue.split("\n");
+    return list[0];
+}
+
+/*
+ *  @ 获取环境光传感器数据
+ *  返回当前ALS数据值
+ */
+QString Ap3216c::alsData() {
+    return alsdata;
+}
+
+/*
+ *  @ 获取红外传感器数据
+ *  返回当前IR数据值
+ */
+QString Ap3216c::irData() {
+    return irdata;
+}
+
+/*
+ *  @ 获取接近传感器数据
+ *  返回当前PS数据值
+ */
+QString Ap3216c::psData() {
+    return psdata;
+}
+
+/*
+ *  @ 控制数据采集
+ *  启动或停止传感器数据采集
+ */
+void Ap3216c::setCapture(bool str)
+{
+    if (str) {
+        // 启动定时器，500ms间隔采集数据
+        timer->start(500);
+        status = 1;  // 设置状态为运行
+    } else {
+        // 停止定时器
+        timer->stop();
+        status = 0;  // 设置状态为停止
+    }
+}
+
+// =============================================
 
 /*
  *  @ 车灯控制的实现
@@ -268,5 +459,5 @@ void Hardware::init() {
 
     Mlight = new light();
     Mbeep = new beep();
-
+    MAp3216c = new Ap3216c();
 }
