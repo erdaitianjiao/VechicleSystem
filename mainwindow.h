@@ -50,6 +50,7 @@ private:
 //    QRadioButton *radioLight;
 //    QPushButton *pushButton;
 
+
     //哨兵模式
     QTimer *sentryTimer;            // 用于轮询传感器的定时器
     bool isSentryModeActive;        // 用于启用/禁用此模式的标志
