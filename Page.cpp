@@ -9,7 +9,7 @@
 #include "Page.h"
 #include "camera.h"
 
-// 主页
+// 测试
 HomePage::HomePage() {
 
     test1 = new QPushButton(this);
@@ -30,16 +30,20 @@ HomePage::HomePage() {
     pushButton[2]->setGeometry(410, 50, 70, 70);
     pushButton[2]->setText("Ap32");
 
+    pushButton[3]->setGeometry(590, 50, 120, 70);
+    pushButton[3]->setText("哨兵模式");
+
     connect(pushButton[0], &QPushButton::clicked, this, &HomePage::goSerial);
     connect(pushButton[1], &QPushButton::clicked, this, &HomePage::goCamera);
     connect(pushButton[2], &QPushButton::clicked, this, &HomePage::goAp3216C);
+    connect(pushButton[3], &QPushButton::clicked, this, &HomePage::goSentryMode);
 
-    test1->setText("界面1");
+    test1->setText("测试界面");
 
 }
 
 /*****************************************************************/
-// 地图
+// 主页
 MapPage::MapPage() {
 
     test2 = new QPushButton(this);
@@ -519,6 +523,41 @@ void CameraPage::saveImageToLocal()
     }
 }
 
+void CameraPage::takePicture()
+{
+    if(!saveImage.isNull())
+    {
+        //获取当前的系统时间，并将其格式化成一个特定的字符串
+        QString timerstring = QDateTime::currentDateTime().toString("yyyyMMdd_hhmmss");
+        //sentry_ 和 .png 是固定的文本，分别代表文件名前缀和文件扩展名
+        QString fileName = QString("%1/sentry%2.png").arg(QCoreApplication::applicationDirPath()).arg(timerstring);
+
+        qDebug() << "Sentry Mode : Saving Picture:" << fileName;
+        saveImage.save(fileName, "PNG", -1);
+        photoLabel->setPixmap(QPixmap::fromImage(QImage(fileName)));
+    }
+}
+
+//用于启动摄像头
+void CameraPage::startCameraFeed()
+{
+    if(!pushButton[1]->isCheckable())
+    {
+        if(!pushButton[1]->isChecked())
+        {
+            pushButton[1]->click();         // 模拟点击 "开始" 按钮
+        }
+    }
+}
+
+//用于停止摄像头
+void CameraPage::stopCameraFeed()
+{
+    if(pushButton[1]->isCheckable())
+    {
+        pushButton[1]->click();             // 模拟点击 "关闭" 按钮
+    }
+}
 /*****************************************************************/
 
 // Ap3216cPage - 修改：实现完整的传感器系统界面，同时保留原有结构

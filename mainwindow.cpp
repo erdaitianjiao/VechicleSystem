@@ -44,6 +44,16 @@ MainWindow::MainWindow(QWidget *parent)
     myPageTest->setCurrentIndex(0);
     setCentralWidget(myPageTest);   // 告诉 Qt 用 QStackedWidget 做中央窗体
 
+    //哨兵模式
+    isSentryModeActive = false;     //先将模式禁用
+    sentryTimer = new QTimer(this);
+    connect(sentryTimer, &QTimer::timeout, this, &MainWindow::checkSentrySensors);
+
+    //初始化阈值
+    psAlertThreshold = 50;          // 如果PS值增加50，说明有物体靠近
+    psTriggerThreshold = 200;       // 如果PS值增加200，说明物体非常近 (可视为“接触”)
+
+
     /* 将UI设置为中心部件 */
     //this->setCentralWidget(cameraUi);
 
@@ -55,6 +65,8 @@ MainWindow::MainWindow(QWidget *parent)
 
     connect(Home, &HomePage::goAp3216C, this, [this]{setPage(4); }); //从主界面到Ap32C16的界面
     connect(Ap32, &Ap3216cPage::goHome, this, [this]{setPage(0); }); //从Ap32C16到主界面
+
+    connect(Home, &HomePage::goSentryMode, this, &MainWindow::toggleSentryMode);
 
     // ui->setupUi(this);
 
@@ -108,12 +120,12 @@ void MainWindow::myUiInit() {
 }
 
 // 开关灯按钮
-void MainWindow::pushButtonClicked() {
+//void MainWindow::pushButtonClicked() {
 
 //    if (MyHardware.Mlight->status == 1) MyHardware.Mlight->off();
 //    else MyHardware.Mlight->on();
 
-}
+//}
 
 //页面切换
 void MainWindow::setPage(int idx)
@@ -126,3 +138,86 @@ void MainWindow::setPage(int idx)
 //{
 //    emit goHome();
 //}
+
+//哨兵模式
+void MainWindow::toggleSentryMode()
+{
+    isSentryModeActive = !isSentryModeActive;   //开启此模式
+
+    if(isSentryModeActive)
+    {
+        qDebug() << "哨兵模式开启";
+
+        // 读取当前传感器值以设定一个基准线
+        baselinePsvalue = MyHardware.MAp3216c->psData().toInt();
+        sentryTimer->start(200); //每200ms轮询一次
+
+    }
+    else
+    {
+        qDebug() << "哨兵模式关闭";
+
+        sentryTimer->stop();        //将定时器关闭
+        MyHardware.Mbeep->off();    //关闭警报
+
+        setPage(0);
+    }
+}
+
+//哨兵模式的核心传感器逻辑
+void MainWindow::checkSentrySensors()
+{
+    if(!isSentryModeActive)
+    {
+        sentryTimer->stop();
+        return;
+    }
+
+    int currentPsValue = MyHardware.MAp3216c->psData().toInt();
+    int delta = currentPsValue - baselinePsvalue;
+
+    qDebug() << "Current Ps:" << currentPsValue << "Baseline:" << baselinePsvalue
+             << "Delta:" << delta;
+
+    // 状态 1: 物体非常近 ("接触") - 触发拍照
+    if(delta > psTriggerThreshold)
+    {
+        qDebug() << "Sentry Event: \r\n TRIGGER! Object is very close.";
+
+        //下面执行触发警报的操作
+        //1.拉响警报
+        MyHardware.Mbeep->on();
+
+        //2.检查摄像头是否可用
+        if(myPageTest->currentIndex() != 3)
+        {
+            setPage(3);     //切换到 CameraPage
+
+            crm->startCameraFeed(); //确保摄像头能自动启动
+        }
+
+        //3.拍照
+        crm->takePicture();
+
+        //4.停止检查，避免重复触发
+        isSentryModeActive = false;
+        QTimer::singleShot(5000, this, [this](){
+            MyHardware.Mbeep->off();
+            isSentryModeActive = true;      // 5秒后重新启用
+            baselinePsvalue = MyHardware.MAp3216c->psData().toInt();    // 重置基准值
+        });
+    }
+
+    // 状态 2: 物体在附近 - 警觉
+    else if (delta > psAlertThreshold)
+    {
+        qDebug() << "Sentry Event: \r\n ALERT! Object detected nearby.";
+
+        //切换到摄像头页面并启动视频流
+        if(myPageTest->currentIndex() != 3)
+        {
+            setPage(3);
+            crm->startCameraFeed();     //在页面显示时自动启动摄像头
+        }
+    }
+}

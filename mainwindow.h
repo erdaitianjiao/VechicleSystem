@@ -8,6 +8,7 @@
 #include <QStackedWidget>
 #include <QPixmap>
 #include <QBuffer>
+#include <QTimer>
 
 #include "camera.h"
 #include "MyShell.h"
@@ -46,12 +47,21 @@ private:
 
     // 测试用
 
-    QRadioButton *radioLight;
-    QPushButton *pushButton;
+//    QRadioButton *radioLight;
+//    QPushButton *pushButton;
 
+    //哨兵模式
+    QTimer *sentryTimer;            // 用于轮询传感器的定时器
+    bool isSentryModeActive;        // 用于启用/禁用此模式的标志
+    int baselinePsvalue;            // 存储没有物体靠近时的正常PS值
+    int psAlertThreshold;           // 触发警报的PS值变化阈值
+    int psTriggerThreshold;         // 触发拍照的更高变化阈值
 
 private slots:
-    void pushButtonClicked();
+    //void pushButtonClicked();
+
+    void checkSentrySensors();      // 将由定时器调用的槽函数
+    void toggleSentryMode();        // 用于开启/关闭模式的槽函数
 
 public slots:
     void  setPage(int idx);

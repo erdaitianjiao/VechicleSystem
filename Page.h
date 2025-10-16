@@ -20,6 +20,8 @@
 #include <QHBoxLayout>
 #include <QScrollArea>
 #include <QFont>
+#include <QTimer>
+#include <QDateTime>
 #include "Hardware.h"
 
 /*
@@ -28,7 +30,7 @@
  *
  */
 
-#define AppNum     3
+#define AppNum     4
 
 class Camera;
 
@@ -41,7 +43,7 @@ class Camera;
 //class QPushButton;
 //class Camera;
 
-// 主页 展示基本信息等
+// 测试界面
 class HomePage : public QWidget
 {
 
@@ -58,10 +60,11 @@ signals:
     void goSerial();
     void goCamera();
     void goAp3216C();
+    void goSentryMode();
 
 };
 
-// 地图文件 原本想调用百度地图api 有点太难了 先搁置
+// 主界面
 class MapPage : public QWidget {
 
 public:
@@ -180,6 +183,11 @@ private:
 
     /* 扫描是否存在摄像头 */
     void scanCameraDevice();
+
+public slots:
+    void takePicture();
+    void startCameraFeed();
+    void stopCameraFeed();
 
 private slots:
     /* 显示图像 */
