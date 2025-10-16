@@ -10,6 +10,13 @@
 #include <QObject>
 #include <QSerialPortInfo>
 #include <QStackedWidget>
+#include <QString>
+#include <QTextStream>
+#include <QTimer>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
 
 // 前照大灯
 class light {
@@ -67,6 +74,50 @@ public:
     QSerialPort *serialPort;
 };
 
+/*
+ *  @ AP3216C三合一传感器类
+ *  集成环境光传感器(ALS)、接近传感器(PS)和红外传感器(IR)
+ *  通过sysfs接口读取传感器数据
+ */
+class Ap3216c : public QObject
+{
+    Q_OBJECT
+
+public:
+    explicit Ap3216c(QObject *parent = 0);
+    ~Ap3216c();
+
+    // 控制数据采集
+    void setCapture(bool str);
+
+    // 读取传感器数据
+    QString alsData();
+    QString psData();
+    QString irData();
+
+    // 获取传感器状态
+    int GetStatus();
+
+private:
+    QTimer *timer;          // 数据采集定时器
+    QString alsdata;        // 环境光传感器数据
+    QString psdata;         // 接近传感器数据
+    QString irdata;         // 红外传感器数据
+    int status;             // 传感器状态：0-停止，1-运行
+
+    // 从硬件读取原始数据
+    QString readAlsData();
+    QString readPsData();
+    QString readIrData();
+
+private slots:
+    // 定时器超时槽函数 - 读取并更新传感器数据
+    void timer_timeout();
+
+signals:
+    // 传感器数据变化信号
+    void ap3216cDataChanged();
+};
 
 // 硬件集合
 class Hardware {
@@ -77,7 +128,7 @@ public:
     light *Mlight;          // 实例化前照灯
     beep  *Mbeep;           // 实例化警报器
     SerialManger *smr;      // 实例化Serial
-
+    Ap3216c *MAp3216c;      // 实例化AP3216C传感器
 
 };
 

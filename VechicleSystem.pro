@@ -15,10 +15,28 @@ DEFINES += QT_DEPRECATED_WARNINGS
 # You can also select to disable deprecated APIs only up to a certain version of Qt.
 #DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x060000    # disables all the APIs deprecated before Qt 6.0.0
 
+TARGET_ARCH = $${QT_ARCH}
+contains(TARGET_ARCH, arm){
+    CONFIG += link_pkgconfig
+    PKGCONFIG += opencv
+    INCLUDEPATH += /opt/fsl-imx-x11/4.1.15-2.1.0/sysroots/cortexa7hf-neon-poky-linux-gnueabi/usr/include
+} else {
+    LIBS += -L/usr/local/lib \
+            -lopencv_core \
+            -lopencv_highgui \
+            -lopencv_imgproc \
+            -lopencv_videoio \
+            -lopencv_imgcodecs
+
+    #INCLUDEPATH可写可不写，系统会到找到此路径
+    INCLUDEPATH += /usr/local/include
+}
+
 SOURCES += \
     Hardware.cpp \
     MyShell.cpp \
     Page.cpp \
+    camera.cpp \
     main.cpp \
     mainwindow.cpp
 
@@ -26,6 +44,7 @@ HEADERS += \
     Hardware.h \
     MyShell.h \
     Page.h \
+    camera.h \
     mainwindow.h
 
 FORMS += \

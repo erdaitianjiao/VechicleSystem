@@ -6,7 +6,10 @@
 #include <QCheckBox>
 #include <QRadioButton>
 #include <QStackedWidget>
+#include <QPixmap>
+#include <QBuffer>
 
+#include "camera.h"
 #include "MyShell.h"
 #include "Hardware.h"
 #include "Page.h"
@@ -38,6 +41,8 @@ private:
     HomePage *Home;
     MapPage *Map;
     Serialpage *ser;
+    CameraPage *crm;
+    Ap3216cPage *Ap32;
 
     // 测试用
 
@@ -50,7 +55,6 @@ private slots:
 
 public slots:
     void  setPage(int idx);
-    void MAIN_home();
 
 };
 #endif // MAINWINDOW_H

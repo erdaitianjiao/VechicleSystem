@@ -3,17 +3,42 @@
 #include <QScreen>
 #include <QRect>
 #include <QDebug>
+#include <QStyle>
+#include <QSpacerItem>
+#include <QSizePolicy>
 #include "Page.h"
+#include "camera.h"
 
 // 主页
 HomePage::HomePage() {
 
     test1 = new QPushButton(this);
     // test1->setMinimumSize(100, 100);
+
+    //实例化按钮
+    for (int i = 0; i < AppNum; i++)
+    {
+        pushButton[i] = new QPushButton(this);
+    }
+    //pushButton = new QPushButton(this);
+    pushButton[0]->setGeometry(50, 50, 70, 70);
+    pushButton[0]->setText("串口");
+
+    pushButton[1]->setGeometry(230, 50, 70, 70);
+    pushButton[1]->setText("camera");
+
+    pushButton[2]->setGeometry(410, 50, 70, 70);
+    pushButton[2]->setText("Ap32");
+
+    connect(pushButton[0], &QPushButton::clicked, this, &HomePage::goSerial);
+    connect(pushButton[1], &QPushButton::clicked, this, &HomePage::goCamera);
+    connect(pushButton[2], &QPushButton::clicked, this, &HomePage::goAp3216C);
+
     test1->setText("界面1");
 
 }
 
+/*****************************************************************/
 // 地图
 MapPage::MapPage() {
 
@@ -23,13 +48,14 @@ MapPage::MapPage() {
 
 }
 
+/*****************************************************************/
 // 串口界面
 Serialpage::Serialpage()
 {
     //test3 = new QPushButton(this);
 
     //布局初始化
-    layoutInit();
+    Ser_layoutInit();
 
     //扫描系统的串口
     scanSerialport();
@@ -50,7 +76,7 @@ Serialpage::Serialpage()
 }
 
 //串口初始化界面
-void Serialpage::layoutInit()
+void Serialpage::Ser_layoutInit()
 {
     QList<QScreen *> list_screen = QGuiApplication::screens();
 
@@ -308,3 +334,383 @@ void Serialpage::serialPortReadyRead()
     textBrowser->insertPlainText(QString(buf));
 }
 
+/*****************************************************************/
+//摄像机
+CameraPage::CameraPage(QWidget *parent) : QWidget(parent)
+{
+    /* 布局初始化 */
+    Camer_layoutInit();
+
+    /* 扫描摄像头 */
+    scanCameraDevice();
+}
+
+void CameraPage::Camer_layoutInit()
+{
+    /* 实例化与布局 */
+    photoLabel = new QLabel();
+    rightWidget = new QWidget();
+    comboBox = new QComboBox();
+    pushButton[0] = new QPushButton();
+    pushButton[1] = new QPushButton();
+    scrollArea = new QScrollArea();
+    displayLabel = new QLabel(scrollArea);
+    vboxLayout = new QVBoxLayout();
+    hboxLayout = new QHBoxLayout();
+    closeButton = new QPushButton();
+
+    // NEW: Create a horizontal layout to manage the top-right corner
+    QHBoxLayout *topRightLayout = new QHBoxLayout();
+    topRightLayout->addStretch(); // Spacer to push the button to the right
+    topRightLayout->addWidget(closeButton);
+
+    // Add widgets to the main vertical layout for the right panel
+    vboxLayout->addLayout(topRightLayout); // NEW: Add the top-right layout first
+    vboxLayout->addWidget(photoLabel);
+    vboxLayout->addWidget(comboBox);
+    vboxLayout->addWidget(pushButton[0]);
+    vboxLayout->addWidget(pushButton[1]);
+    vboxLayout->addStretch(); // 添加伸缩项，使控件靠上
+
+    rightWidget->setLayout(vboxLayout);
+
+    hboxLayout->addWidget(scrollArea);
+    hboxLayout->addWidget(rightWidget);
+    this->setLayout(hboxLayout); // 为CameraUI设置主布局
+
+    // 获取父窗口的大小来进行一些最小宽度的设置
+    QWidget* parentWin = this->parentWidget();
+    int parentWidth = parentWin ? parentWin->width() : 800;
+    int parentHeight = parentWin ? parentWin->height() : 480;
+
+
+    pushButton[0]->setMaximumHeight(40);
+    pushButton[0]->setMaximumWidth(200);
+
+    pushButton[1]->setMaximumHeight(40);
+    pushButton[1]->setMaximumWidth(200);
+
+    comboBox->setMaximumHeight(40);
+    comboBox->setMaximumWidth(200);
+    photoLabel->setFixedSize(160, 120); // 使用固定大小可能效果更好
+    scrollArea->setMinimumWidth(parentWidth - comboBox->width());
+
+    /* 显示图像最大画面为xx */
+    displayLabel->setMinimumWidth(scrollArea->width() * 0.75);
+    displayLabel->setMinimumHeight(scrollArea->height() * 0.75);
+    scrollArea->setWidget(displayLabel);
+
+    /* 居中显示 */
+    scrollArea->setAlignment(Qt::AlignCenter);
+
+    /* 自动拉伸 */
+    photoLabel->setScaledContents(true);
+    displayLabel->setScaledContents(true);
+
+    /* 设置一些属性 */
+    pushButton[0]->setText("拍照");
+    pushButton[0]->setEnabled(false);
+    pushButton[1]->setText("开始");
+    pushButton[1]->setCheckable(true);
+
+    // NEW: Set properties for the close button
+    //closeButton->setFixedSize(32, 32); // Give it a fixed square size
+    //closeButton->setIcon(style()->standardIcon(QStyle::SP_TitleBarCloseButton)); // Use a standard system icon
+    //closeButton->setFlat(true); // Remove the button border for a cleaner look
+    closeButton->setText("关闭"); // Add a helpful tooltip
+
+    /* 摄像头 */
+    camera = new Camera(this);
+
+    /* 信号连接槽 */
+    connect(camera, &Camera::readyImage, this, &CameraPage::showImage);
+    connect(pushButton[1], &QPushButton::clicked, camera, &Camera::cameraProcess);
+    connect(pushButton[1], &QPushButton::clicked, this, &CameraPage::setButtonText);
+    connect(pushButton[0], &QPushButton::clicked, this, &CameraPage::saveImageToLocal);
+
+    connect(closeButton, &QPushButton::clicked, this, &CameraPage::goHome);
+}
+
+void CameraPage::scanCameraDevice()
+{
+    /* 如果是Windows系统，一般是摄像头0 */
+#if defined(Q_OS_WIN)
+    comboBox->addItem("windows摄像头0");
+    connect(comboBox, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            camera, &Camera::selectCameraDevice);
+#else
+    /* QFile文件指向/dev/video0 */
+    QFile file("/dev/video0");
+
+    /* 如果文件存在 */
+    if (file.exists())
+        comboBox->addItem("video0");
+    else {
+        displayLabel->setText("无摄像头设备");
+        return;
+    }
+
+    file.setFileName("/dev/video1");
+
+    if (file.exists()) {
+        comboBox->addItem("video1");
+        /* 开发板ov5640等设备是1 */
+        comboBox->setCurrentIndex(1);
+    }
+
+    file.setFileName("/dev/video2");
+
+    if (file.exists())
+        /* 开发板USB摄像头设备是2 */
+        comboBox->addItem("video2");
+
+#if !__arm__
+    /* ubuntu的USB摄像头一般是0 */
+    comboBox->setCurrentIndex(0);
+#endif
+
+    connect(comboBox, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            camera, &Camera::selectCameraDevice);
+#endif
+}
+
+void CameraPage::showImage(const QImage &image)
+{
+    /* 显示图像 */
+    displayLabel->setPixmap(QPixmap::fromImage(image));
+    saveImage = image;
+
+    /* 判断图像是否为空，空则设置拍照按钮不可用 */
+    if (!saveImage.isNull())
+        pushButton[0]->setEnabled(true);
+    else
+        pushButton[0]->setEnabled(false);
+}
+
+void CameraPage::setButtonText(bool bl)
+{
+    if (bl) {
+        /* 设置摄像头设备 */
+        camera->selectCameraDevice(comboBox->currentIndex());
+        pushButton[1]->setText("关闭");
+    } else {
+        /* 若关闭了摄像头则禁用拍照按钮 */
+        pushButton[0]->setEnabled(false);
+        pushButton[1]->setText("开始");
+    }
+}
+
+void CameraPage::saveImageToLocal()
+{
+    /* 判断图像是否为空 */
+    if (!saveImage.isNull()) {
+        QString fileName =
+                QCoreApplication::applicationDirPath() + "/test.png";
+        qDebug()<<"正在保存"<<fileName<<"图片,请稍候..."<<endl;
+
+        /* save(arg1，arg2，arg3)重载函数，arg1代表路径文件名，
+         * arg2保存的类型，arg3代表保存的质量等级 */
+        saveImage.save(fileName, "PNG", -1);
+
+        /* 设置拍照的图像为显示在photoLabel上 */
+        photoLabel->setPixmap(QPixmap::fromImage(QImage(fileName)));
+
+        qDebug()<<"保存完成！"<<endl;
+    }
+}
+
+/*****************************************************************/
+
+// Ap3216cPage - 修改：实现完整的传感器系统界面，同时保留原有结构
+Ap3216cPage::Ap3216cPage()
+{
+//    btn = new QPushButton(this);
+//    // test2->setMinimumSize(100, 100);
+//    btn->setText("返回");
+//    //connect(btn, &QPushButton::clicked, this, &Ap3216cPage::goHome);
+
+    Ap32_layoutInit();
+}
+
+Ap3216cPage::~Ap3216cPage() {
+    // 新增：确保停止数据采集
+    if (MyHardware.MAp3216c) {
+        MyHardware.MAp3216c->setCapture(false);
+    }
+}
+
+void Ap3216cPage::Ap32_layoutInit()
+{
+    // 首先设置主widget的布局
+    QVBoxLayout *outerLayout = new QVBoxLayout(this);
+    outerLayout->setContentsMargins(0, 0, 0, 0);  // 新增：移除边距
+    outerLayout->setSpacing(0);                    // 新增：移除间距
+
+    // 创建内部页面管理器
+    internalStackedWidget = new QStackedWidget(this);
+
+    // 新增：设置大小策略确保扩展
+    internalStackedWidget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+
+    // 创建主页面
+    ap3216cMainPage = new QWidget();
+    mainLayout = new QVBoxLayout(ap3216cMainPage);
+    mainLayout->setSpacing(30);
+    mainLayout->setContentsMargins(50, 80, 50, 50);
+
+    // 主页面标题
+    titleLabel = new QLabel("AP3216C 传感器系统", ap3216cMainPage);
+    QFont titleFont("Arial", 28, QFont::Bold);
+    titleLabel->setFont(titleFont);
+    titleLabel->setAlignment(Qt::AlignCenter);
+
+    // 主页面说明文字
+    descLabel = new QLabel(
+        "集成环境光传感器(ALS)、接近传感器(PS)和红外传感器(IR)\n\n"
+        "点击下方按钮查看实时传感器数据",
+        ap3216cMainPage
+    );
+    QFont descFont("Arial", 16);
+    descLabel->setFont(descFont);
+    descLabel->setAlignment(Qt::AlignCenter);
+    descLabel->setWordWrap(true);
+
+    //返回主界面的按钮
+    btn = new QPushButton(this);
+    btn->setText("返回");
+    connect(btn, &QPushButton::clicked, this, &Ap3216cPage::goHome);
+
+    // 查看传感器数据按钮
+    sensorBtn = new QPushButton("查看传感器数据", ap3216cMainPage);
+    sensorBtn->setMinimumHeight(80);
+    QFont btnFont("Arial", 18);
+    sensorBtn->setFont(btnFont);
+
+    // 弹性空间
+    QSpacerItem *spacer = new QSpacerItem(20, 40, QSizePolicy::Minimum, QSizePolicy::Expanding);
+
+    // 主页面布局
+    mainLayout->addWidget(titleLabel);
+    mainLayout->addWidget(descLabel);
+    mainLayout->addItem(spacer);
+    mainLayout->addWidget(btn);
+    mainLayout->addWidget(sensorBtn);
+
+    // 创建传感器数据页面
+    ap3216cSensorPage = new QWidget();
+    sensorLayout = new QVBoxLayout(ap3216cSensorPage);
+    sensorLayout->setSpacing(10);
+    sensorLayout->setContentsMargins(20, 50, 20, 20);
+
+    // 返回按钮
+    backBtn = new QPushButton("返回", ap3216cSensorPage);
+    backBtn->setMinimumHeight(50);
+    QFont backFont("Arial", 16);
+    backBtn->setFont(backFont);
+
+    // 传感器标题
+    sensorTitle = new QLabel("传感器实时数据", ap3216cSensorPage);
+    QFont sensorTitleFont("Arial", 24, QFont::Bold);
+    sensorTitle->setFont(sensorTitleFont);
+    sensorTitle->setAlignment(Qt::AlignCenter);
+
+    // 传感器数据显示区域
+    QGridLayout *sensorGridLayout = new QGridLayout();
+    sensorGridLayout->setSpacing(15);
+
+    // 传感器标签和数值显示
+    alsLabel = new QLabel("环境光(ALS):", ap3216cSensorPage);
+    psLabel = new QLabel("接近传感器(PS):", ap3216cSensorPage);
+    irLabel = new QLabel("红外(IR):", ap3216cSensorPage);
+
+    alsValue = new QLabel("--", ap3216cSensorPage);
+    psValue = new QLabel("--", ap3216cSensorPage);
+    irValue = new QLabel("--", ap3216cSensorPage);
+
+    // 设置字体
+    QFont labelFont("Arial", 16);
+    QFont valueFont("Arial", 18, QFont::Bold);
+
+    alsLabel->setFont(labelFont);
+    psLabel->setFont(labelFont);
+    irLabel->setFont(labelFont);
+
+    alsValue->setFont(valueFont);
+    psValue->setFont(valueFont);
+    irValue->setFont(valueFont);
+
+    // 添加到网格布局
+    sensorGridLayout->addWidget(alsLabel, 0, 0);
+    sensorGridLayout->addWidget(alsValue, 0, 1);
+    sensorGridLayout->addWidget(psLabel, 1, 0);
+    sensorGridLayout->addWidget(psValue, 1, 1);
+    sensorGridLayout->addWidget(irLabel, 2, 0);
+    sensorGridLayout->addWidget(irValue, 2, 1);
+
+    // 传感器页面布局
+    sensorLayout->addWidget(backBtn);
+    sensorLayout->addWidget(sensorTitle);
+    sensorLayout->addLayout(sensorGridLayout);
+    sensorLayout->addStretch(1);
+
+    // 将两个页面添加到内部堆叠窗口
+    internalStackedWidget->addWidget(ap3216cMainPage);
+    internalStackedWidget->addWidget(ap3216cSensorPage);
+
+    // 设置主布局
+    outerLayout->addWidget(internalStackedWidget);
+
+    // 连接信号槽
+    connect(sensorBtn, SIGNAL(clicked()), this, SLOT(showSensorPage()));
+    connect(backBtn, SIGNAL(clicked()), this, SLOT(showMainPage()));
+
+    // 连接传感器数据更新信号
+    if (MyHardware.MAp3216c) {
+        connect(MyHardware.MAp3216c, SIGNAL(ap3216cDataChanged()),
+                this, SLOT(updateSensorData()));
+    }
+
+    // 默认显示主页面
+    internalStackedWidget->setCurrentIndex(0);
+
+    // 调试：验证布局
+    qDebug() << "Ap3216cPage初始化完成";
+    qDebug() << "internalStackedWidget大小策略:" << internalStackedWidget->sizePolicy();
+
+    // 新增：强制更新布局
+    this->updateGeometry();
+    internalStackedWidget->updateGeometry();
+}
+
+// 新增：显示传感器数据页面
+void Ap3216cPage::showSensorPage() {
+    internalStackedWidget->setCurrentIndex(1);
+
+    // 启动数据采集
+    if (MyHardware.MAp3216c) {
+        MyHardware.MAp3216c->setCapture(true);
+    }
+
+    qDebug() << "切换到传感器数据页面";
+}
+
+// 新增：显示主页面
+void Ap3216cPage::showMainPage() {
+    internalStackedWidget->setCurrentIndex(0);
+
+    // 停止数据采集
+    if (MyHardware.MAp3216c) {
+        MyHardware.MAp3216c->setCapture(false);
+    }
+
+    qDebug() << "返回传感器主页面";
+}
+
+// 新增：更新传感器数据显示
+void Ap3216cPage::updateSensorData() {
+    if (MyHardware.MAp3216c) {
+        alsValue->setText(MyHardware.MAp3216c->alsData());
+        psValue->setText(MyHardware.MAp3216c->psData());
+        irValue->setText(MyHardware.MAp3216c->irData());
+    }
+}
