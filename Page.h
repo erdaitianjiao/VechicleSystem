@@ -54,6 +54,7 @@ public:
 
 private:
     QPushButton *pushButton[AppNum]; // 按钮 用来选择应用
+    QPushButton *rightbutton;   //右边的按钮 用来到主界面
     QPushButton *test1;         // 测试按钮 可删除
 
 signals:
@@ -61,11 +62,14 @@ signals:
     void goCamera();
     void goAp3216C();
     void goSentryMode();
+    void goMainPage();
 
 };
 
 // 主界面
-class MapPage : public QWidget {
+class MapPage : public QWidget
+{
+    Q_OBJECT
 
 public:
     MapPage();
@@ -73,6 +77,11 @@ public:
 private:
 
     QPushButton *test2;             // 测试按钮 可删除
+    QPushButton *button;
+
+signals:
+    void goSentryMode();
+    void goHome();          //返回信号
 
 };
 

@@ -38,8 +38,8 @@ HomePage::HomePage() {
     connect(pushButton[2], &QPushButton::clicked, this, &HomePage::goAp3216C);
     connect(pushButton[3], &QPushButton::clicked, this, &HomePage::goSentryMode);
 
-    test1->setText("测试界面");
-
+    test1->setText("返回主界面");
+    connect(test1, &QPushButton::clicked, this, &HomePage::goMainPage);
 }
 
 /*****************************************************************/
@@ -47,8 +47,19 @@ HomePage::HomePage() {
 MapPage::MapPage() {
 
     test2 = new QPushButton(this);
-    // test2->setMinimumSize(100, 100);
-    test2->setText("界面2");
+    //test2->setMinimumSize(100, 100);
+    test2->setText("测试");
+
+    button = new QPushButton("哨兵模式", this);
+    button->setFixedSize(200, 50);
+
+    QVBoxLayout *layout = new QVBoxLayout(this);
+    layout->addWidget(button, 0, Qt::AlignCenter);  // 居中
+    layout->setContentsMargins(0, 0, 0, 0);         // 去掉边距
+    setLayout(layout);
+
+    connect(test2, &QPushButton::clicked, this, &MapPage::goHome);
+    connect(button, &QPushButton::clicked, this, &MapPage::goSentryMode);
 
 }
 

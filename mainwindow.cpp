@@ -41,7 +41,7 @@ MainWindow::MainWindow(QWidget *parent)
     myPageTest->addWidget(Ap32);
 
     // 切换界面 可将和按钮绑定
-    myPageTest->setCurrentIndex(0);
+    myPageTest->setCurrentIndex(1);
     setCentralWidget(myPageTest);   // 告诉 Qt 用 QStackedWidget 做中央窗体
 
     //哨兵模式
@@ -57,17 +57,21 @@ MainWindow::MainWindow(QWidget *parent)
     /* 将UI设置为中心部件 */
     //this->setCentralWidget(cameraUi);
 
-    connect(Home, &HomePage::goSerial, this, [this]{setPage(2); });  //从主界面到串口界面
-    connect(ser, &Serialpage::goHome, this, [this]{setPage(0); });  //从串口界面到主界面
+    connect(Home, &HomePage::goSerial, this, [this]{setPage(2); });  //从测试界面到串口界面
+    connect(ser, &Serialpage::goHome, this, [this]{setPage(0); });  //从串口界面到测试界面
 
-    connect(Home, &HomePage::goCamera, this, [this]{setPage(3); }); //从主界面到camera界面
-    connect(crm, &CameraPage::goHome, this, [this]{setPage(0); }); //从camera界面到主界面
+    connect(Home, &HomePage::goCamera, this, [this]{setPage(3); }); //从测试界面到camera界面
+    connect(crm, &CameraPage::goHome, this, [this]{setPage(0); }); //从camera界面到测试界面
 
-    connect(Home, &HomePage::goAp3216C, this, [this]{setPage(4); }); //从主界面到Ap32C16的界面
-    connect(Ap32, &Ap3216cPage::goHome, this, [this]{setPage(0); }); //从Ap32C16到主界面
+    connect(Home, &HomePage::goAp3216C, this, [this]{setPage(4); }); //从测试界面到Ap32C16的界面
+    connect(Ap32, &Ap3216cPage::goHome, this, [this]{setPage(0); }); //从Ap32C16到测试界面
 
-    connect(Home, &HomePage::goSentryMode, this, &MainWindow::toggleSentryMode);
+    connect(Home, &HomePage::goSentryMode, this, &MainWindow::toggleSentryMode); //测试界面触发哨兵模式
 
+    connect(Map, &MapPage::goHome, this, [this]{setPage(0); }); //从主界面到测试界面
+    connect(Map, &MapPage::goSentryMode, this, &MainWindow::toggleSentryMode);      //主界面触发哨兵模式
+
+    connect(Home, &HomePage::goMainPage, this, [this]{setPage(1); }); //从测试界面到主界面
     // ui->setupUi(this);
 
 }
@@ -160,7 +164,7 @@ void MainWindow::toggleSentryMode()
         sentryTimer->stop();        //将定时器关闭
         MyHardware.Mbeep->off();    //关闭警报
 
-        setPage(0);
+        //setPage(0);
     }
 }
 
