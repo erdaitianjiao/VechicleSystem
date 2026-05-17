@@ -1,5 +1,5 @@
 #include "mainwindow.h"
-#include "Hardware.h"
+#include "HardwareManager.h"
 #include "MyShell.h"
 
 #include <QApplication>
@@ -10,7 +10,7 @@
 int main(int argc, char *argv[]) {
 
     // 初始化硬件
-    MyHardware.init();
+    HardwareManager::instance().initAll();
 
     QApplication a(argc, argv);
 

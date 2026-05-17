@@ -1,7 +1,0 @@
-<RCC>
-    <qresource prefix="/">
-        <file>img/switch_on.png</file>
-        <file>style.qss</file>
-        <file>img/switch_off.png</file>
-    </qresource>
-</RCC>

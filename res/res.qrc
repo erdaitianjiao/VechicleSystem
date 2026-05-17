@@ -1,0 +1,16 @@
+<RCC>
+    <qresource prefix="/">
+        <file>style.qss</file>
+        <file>img/switch_on.png</file>
+        <file>img/switch_off.png</file>
+        <file>icons/home.svg</file>
+        <file>icons/car.svg</file>
+        <file>icons/camera.svg</file>
+        <file>icons/music.svg</file>
+        <file>icons/map.svg</file>
+        <file>icons/playback.svg</file>
+        <file>icons/clock.svg</file>
+        <file>icons/album.svg</file>
+        <file>icons/volume.svg</file>
+    </qresource>
+</RCC>

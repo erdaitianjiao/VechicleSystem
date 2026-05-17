@@ -1,0 +1,84 @@
+================================================================
+VechicleSystem 调试日志
+================================================================
+
+[2026-05-17 16:00] 相机预览 - 像素格式修复
+----------------------------------------------------------------
+问题：
+  相机预览流可以打开摄像头，但显示画面为黑白，且存在重影和
+  图像重叠的问题。
+
+根因：
+  GStreamer 预览管道在 caps 过滤器中未指定视频输出格式：
+
+    video/x-raw,width=640,height=480    （未指定 format）
+
+  videoconvert 在没有明确格式的情况下，协商出的格式（可能是
+  I420/YUV 或 NV12）与 appsink 回调中使用的 QImage 格式不匹配。
+  回调中使用 QImage::Format_RGB888（24位RGB，每像素3字节）解析
+  缓冲区数据，导致像素数据被错误解释。
+
+修复：
+  1. 管道强制输出 BGRx 格式：
+     video/x-raw,format=BGRx,width=640,height=480
+
+  2. 添加 gst_app_sink_set_caps() 强制格式协商。
+
+  3. 回调改用 QImage::Format_RGB32（小端 x86 平台上即为 BGRx），
+     替换原来的 Format_RGB888。
+
+  4. 通过 GstVideoInfo 正确处理 stride（行对齐）—— 当缓冲区存在
+     行填充时，逐行拷贝像素数据以匹配 QImage 的内存布局。
+
+  5. 添加 gstreamer-video-1.0 的 pkgconfig 依赖，用于引入
+     GstVideoInfo / gst_video_info_from_caps()。
+
+变更文件：
+  camera/CameraDevice.cpp:
+    - buildPreviewPipeline(): caps 中添加 format=BGRx，
+      添加 gst_app_sink_set_caps() 调用
+    - onNewSampleCallback(): Format_RGB888 替换为 Format_RGB32，
+      添加 GstVideoInfo stride 处理逻辑
+  VechicleSystem.pro:
+    - PKGCONFIG 中添加 gstreamer-video-1.0
+
+================================================================
+
+[2026-05-17 16:42] 拍照录像失败 — 编码器修复
+----------------------------------------------------------------
+问题：
+  拍照和录像功能均失败，无报错但文件未生成。
+
+排查：
+  1. 检查 GStreamer 编码器可用性：
+     - x264enc: 不存在 (未安装 x264 插件)
+     - jpegenc: 可用 (拍照正常)
+     - avenc_mpeg1video: 可用 (libav MPEG-1 编码器)
+     - mpegpsmux: 可用 (MPEG PS 封装器)
+
+  2. 命令行验证管道：
+     gst-launch-1.0 v4l2src num-buffers=1 ! videoconvert ! jpegenc ! filesink
+     → 拍照管道正常, 生成 35KB JPEG 文件
+
+     gst-launch-1.0 -e v4l2src ! videoconvert ! avenc_mpeg1video !
+       mpegpsmux ! filesink
+     → 录像管道正常, 生成 1.1MB MPEG 文件
+
+根因：
+  1. 录像管道使用了 x264enc, 但系统未安装该编码器
+  2. 拍照管道缺少 videoconvert 进行色彩空间转换
+  3. 状态切换未等待异步完成
+
+修复：
+  1. 录像编码器: x264enc ! h264parse ! mp4mux
+     改为 avenc_mpeg1video ! mpegpsmux
+  2. 拍照管道增加 videoconvert 元素
+  3. 添加 waitForState() 处理异步状态切换
+  4. 添加 logBusMessages() 打印总线错误
+  5. 所有操作添加 [Camera] 前缀日志
+
+变更文件：
+  camera/CameraDevice.cpp — 全面重写
+  logs/vechicle-debug.log — 本日志
+
+================================================================

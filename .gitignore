@@ -66,6 +66,13 @@ Thumbs.db
 # Python byte code
 *.pyc
 
+# Build output
+build/
+
+# User-generated content
+record/
+media/
+
 # Binaries
 # --------
 *.dll
