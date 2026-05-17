@@ -19,7 +19,16 @@ struct CameraDevice::GstImpl {
     GstElement *previewValve = nullptr;
     GstElement *appsink = nullptr;
     GstElement *recValve = nullptr;
-    GstElement *recBin = nullptr;
+
+    // Recording elements (manually built)
+    GstElement *recVidConv = nullptr;
+    GstElement *recVidEnc = nullptr;
+    GstElement *recAudSrc = nullptr;
+    GstElement *recAudConv = nullptr;
+    GstElement *recAudResample = nullptr;
+    GstElement *recAudEnc = nullptr;
+    GstElement *recMux = nullptr;
+    GstElement *recSink = nullptr;
 };
 
 // ---- helpers ----
@@ -280,56 +289,116 @@ bool CameraDevice::buildPipeline()
 
 bool CameraDevice::linkRecordBin(const QString &filePath)
 {
-    QString desc = QString(
-        "videoconvert ! "
-        "avenc_mpeg1video bitrate=2000000 ! "
-        "mpegpsmux ! "
-        "filesink location=%1 name=recsink")
-        .arg(filePath);
+    qDebug() << LOG_PREFIX << "building recording branch...";
 
-    GError *error = nullptr;
-    m_impl->recBin = gst_parse_bin_from_description(desc.toUtf8().constData(), TRUE, &error);
-    if (error) {
-        qDebug() << LOG_PREFIX << "rec bin parse error:" << error->message;
-        g_error_free(error);
+    // Create elements
+    m_impl->recVidConv = gst_element_factory_make("videoconvert", "recvidconv");
+    m_impl->recVidEnc  = gst_element_factory_make("avenc_mpeg1video", "recvidenc");
+    m_impl->recAudSrc  = gst_element_factory_make("autoaudiosrc", "recaudsrc");
+    m_impl->recAudConv = gst_element_factory_make("audioconvert", "recaudconv");
+    m_impl->recAudResample = gst_element_factory_make("audioresample", "recaudresample");
+    m_impl->recAudEnc  = gst_element_factory_make("avenc_mp2", "recaudenc");
+    m_impl->recMux     = gst_element_factory_make("mpegpsmux", "recmux");
+    m_impl->recSink    = gst_element_factory_make("filesink", "recsink");
+
+    if (!m_impl->recVidConv || !m_impl->recVidEnc || !m_impl->recAudSrc ||
+        !m_impl->recAudConv || !m_impl->recAudResample || !m_impl->recAudEnc ||
+        !m_impl->recMux || !m_impl->recSink) {
+        qDebug() << LOG_PREFIX << "record: failed to create elements (check gst plugins)";
+        removeRecordBin();
         return false;
     }
 
-    gst_bin_add(GST_BIN(m_impl->pipeline), m_impl->recBin);
+    // Set properties
+    g_object_set(G_OBJECT(m_impl->recVidEnc), "bitrate", 2000000, nullptr);
+    g_object_set(G_OBJECT(m_impl->recSink), "location", filePath.toUtf8().constData(), nullptr);
 
+    // Add all to pipeline
+    GstBin *pipe = GST_BIN(m_impl->pipeline);
+    gst_bin_add_many(pipe,
+        m_impl->recVidConv, m_impl->recVidEnc,
+        m_impl->recAudSrc, m_impl->recAudConv, m_impl->recAudResample, m_impl->recAudEnc,
+        m_impl->recMux, m_impl->recSink, nullptr);
+
+    // Link video chain: recValve → recVidConv → recVidEnc → muxer
+    if (!gst_element_link_many(m_impl->recVidConv, m_impl->recVidEnc, nullptr) ||
+        !gst_element_link(m_impl->recVidEnc, m_impl->recMux)) {
+        qDebug() << LOG_PREFIX << "record: video link failed";
+        removeRecordBin();
+        return false;
+    }
+
+    // Link audio chain: audiosrc → audioconv → audioresample → audioenc → muxer
+    if (!gst_element_link_many(m_impl->recAudSrc, m_impl->recAudConv,
+                                m_impl->recAudResample, m_impl->recAudEnc, nullptr) ||
+        !gst_element_link(m_impl->recAudEnc, m_impl->recMux)) {
+        qDebug() << LOG_PREFIX << "record: audio link failed";
+        removeRecordBin();
+        return false;
+    }
+
+    // Link muxer → filesink
+    if (!gst_element_link(m_impl->recMux, m_impl->recSink)) {
+        qDebug() << LOG_PREFIX << "record: muxer→sink link failed";
+        removeRecordBin();
+        return false;
+    }
+
+    // Link recValve → recVidConv
     GstPad *valveSrc = gst_element_get_static_pad(m_impl->recValve, "src");
-    GstPad *binSink = gst_element_get_static_pad(m_impl->recBin, "sink");
+    GstPad *vidSink  = gst_element_get_static_pad(m_impl->recVidConv, "sink");
 
-    GstPadLinkReturn linkRet = gst_pad_link(valveSrc, binSink);
+    GstPadLinkReturn linkRet = gst_pad_link(valveSrc, vidSink);
     gst_object_unref(valveSrc);
-    gst_object_unref(binSink);
+    gst_object_unref(vidSink);
 
     if (linkRet != GST_PAD_LINK_OK) {
-        qDebug() << LOG_PREFIX << "rec pad link FAILED";
-        gst_bin_remove(GST_BIN(m_impl->pipeline), m_impl->recBin);
-        m_impl->recBin = nullptr;
+        qDebug() << LOG_PREFIX << "record: valve→video link failed";
+        removeRecordBin();
         return false;
     }
 
-    gst_element_sync_state_with_parent(m_impl->recBin);
-    qDebug() << LOG_PREFIX << "rec bin linked OK";
+    // Sync states
+    gst_element_sync_state_with_parent(m_impl->recVidConv);
+    gst_element_sync_state_with_parent(m_impl->recVidEnc);
+    gst_element_sync_state_with_parent(m_impl->recAudSrc);
+    gst_element_sync_state_with_parent(m_impl->recAudConv);
+    gst_element_sync_state_with_parent(m_impl->recAudResample);
+    gst_element_sync_state_with_parent(m_impl->recAudEnc);
+    gst_element_sync_state_with_parent(m_impl->recMux);
+    gst_element_sync_state_with_parent(m_impl->recSink);
+
+    qDebug() << LOG_PREFIX << "recording branch (video+audio) linked OK";
     return true;
 }
 
+#define REMOVE_EL(el) if (el) { \
+    gst_element_set_state(el, GST_STATE_NULL); \
+    gst_bin_remove(GST_BIN(m_impl->pipeline), el); \
+    el = nullptr; }
+
 void CameraDevice::removeRecordBin()
 {
-    if (!m_impl->recBin) return;
+    if (!m_impl->recVidConv) return; // nothing to remove
 
+    // Unlink valve from video chain
     GstPad *valveSrc = gst_element_get_static_pad(m_impl->recValve, "src");
     GstPad *peer = gst_pad_get_peer(valveSrc);
     if (peer) { gst_pad_unlink(valveSrc, peer); gst_object_unref(peer); }
     gst_object_unref(valveSrc);
 
-    gst_element_set_state(m_impl->recBin, GST_STATE_NULL);
-    gst_bin_remove(GST_BIN(m_impl->pipeline), m_impl->recBin);
-    m_impl->recBin = nullptr;
-    qDebug() << LOG_PREFIX << "rec bin removed";
+    REMOVE_EL(m_impl->recVidConv);
+    REMOVE_EL(m_impl->recVidEnc);
+    REMOVE_EL(m_impl->recAudSrc);
+    REMOVE_EL(m_impl->recAudConv);
+    REMOVE_EL(m_impl->recAudResample);
+    REMOVE_EL(m_impl->recAudEnc);
+    REMOVE_EL(m_impl->recMux);
+    REMOVE_EL(m_impl->recSink);
+
+    qDebug() << LOG_PREFIX << "recording branch removed";
 }
+#undef REMOVE_EL
 
 void CameraDevice::destroyPipeline()
 {

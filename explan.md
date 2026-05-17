@@ -81,16 +81,34 @@ BottomTabBar（底部导航，7 个标签）
 
 ### 3.3 Shell 终端
 
-通过 termios 将终端设为 raw 模式，逐字符读取以实现：
-- `↑↓` 翻历史命令（内存中保留最近 100 条）
-- `←→` 移动光标
-- Backspace 删除、Ctrl+C 清行、Ctrl+D 退出
+通过 termios 将终端设为 raw 模式（`~ECHO | ~ICANON`），逐字符读取实现完整行编辑功能：
+
+| 按键 | 功能 |
+|------|------|
+| `↑` / `↓` | 翻历史命令（内存保留最近 100 条，无文件 I/O） |
+| `←` / `→` | 移动光标 |
+| Backspace | 删除前一个字符 |
+| Ctrl+C | 清空当前行 |
+| Ctrl+D | 退出 Shell |
+| Tab | 忽略（防止插入制表符） |
+
+按 Enter 执行命令后，通过 `CommandDispatcher::dispatch()` 路由到对应的 `ICommand` 子类：
 
 ```cpp
-// 核心：逐字符读取 + 转义序列识别
+// 命令路由 — 零改动添加新命令
+m_dispatcher->registerCommand(new LightCommand());  // 注册
+m_dispatcher->dispatch(argc, argv);                  // 路由
+```
+
+转义序列解析核心：
+
+```cpp
 read(STDIN_FILENO, &c, 1);
-if (c == '\033') { /* 进入转义序列解析 */ }
-// \033[A = 上键, \033[B = 下键, \033[C = 右键, \033[D = 左键
+if (c == '\033') { inEsc = true; continue; }
+// \033[A = ↑, \033[B = ↓, \033[C = →, \033[D = ←
+
+// 非转义字符直接插入行缓冲区
+currentLine.insert(cursorPos, QChar(c));
 ```
 
 ### 3.4 QSS 样式
@@ -113,7 +131,7 @@ Shuffle     → 随机选取播放
 
 ### 4.2 VideoPlayer — 视频回放
 
-使用 playbin 指定 video-sink 为 `videoconvert ! appsink`，将 GStreamer 缓冲区转为 QImage 发射 `frameReady` 信号。在 Wayland 环境下避免了 `xvimagesink` 不兼容的问题。
+使用 playbin 播放音视频文件。video-sink 指定为 `videoconvert ! appsink`，将视频帧转为 QImage 发射 `frameReady` 信号；audio-sink 使用系统默认（pulsesink / autoaudiosink），无需额外配置。在 Wayland 环境下避免了 `xvimagesink` 不兼容的问题。
 
 ### 4.3 CameraDevice — GStreamer 三条管道详解
 
@@ -173,63 +191,84 @@ int CameraDevice::capturePhoto(const QString &filePath) {
 
 这样做的好处：拍照不中断预览，零延迟，无需额外管道。
 
-#### 管道 3：录像流
+#### 管道 3：录像流（音视频同步）
 
-录像分支通过 `gst_parse_bin_from_description()` 动态构建并链接到 tee 的第二个输出：
+录像分支包含视频编码链和音频采集链，两条链汇入同一个 muxer，最终写入 MPEG PS 文件：
 
 ```
-videoconvert
-  → avenc_mpeg1video bitrate=2000000       // MPEG-1 编码（系统无 x264enc）
-  → mpegpsmux                               // MPEG PS 封装器
-  → filesink location=/path/to/video.mpg
+recValve (来自 tee)
+  → videoconvert → avenc_mpeg1video (2Mbps) ─┐
+                                               ├→ mpegpsmux → filesink
+autoaudiosrc → audioconvert → audioresample   │
+            → avenc_mp2 ───────────────────────┘
 ```
 
-**动态链接流程：**
+**动态构建流程：**
 
 ```cpp
-// 1. 构建录像 bin
-m_impl->recBin = gst_parse_bin_from_description(
-    "videoconvert ! avenc_mpeg1video bitrate=2000000 ! mpegpsmux ! filesink");
+// 1. 手动创建每个元素（不再使用 gst_parse_bin_from_description）
+m_impl->recVidConv = gst_element_factory_make("videoconvert", "...");
+m_impl->recVidEnc  = gst_element_factory_make("avenc_mpeg1video", "...");
+m_impl->recAudSrc  = gst_element_factory_make("autoaudiosrc", "...");
+m_impl->recAudEnc  = gst_element_factory_make("avenc_mp2", "...");
+m_impl->recMux     = gst_element_factory_make("mpegpsmux", "...");
+m_impl->recSink    = gst_element_factory_make("filesink", "...");
 
-// 2. 加入主管道
-gst_bin_add(GST_BIN(m_impl->pipeline), m_impl->recBin);
+// 2. 一次性加入管道
+gst_bin_add_many(GST_BIN(pipeline),
+    recVidConv, recVidEnc, recAudSrc, recAudConv,
+    recAudResample, recAudEnc, recMux, recSink, nullptr);
 
-// 3. 链接阀门输出到 bin 输入
-GstPad *valveSrc = gst_element_get_static_pad(m_impl->recValve, "src");
-GstPad *binSink  = gst_element_get_static_pad(m_impl->recBin, "sink");
-gst_pad_link(valveSrc, binSink);
+// 3. 链接视频链：recValve → recVidConv → recVidEnc → muxer
+gst_element_link_many(recVidConv, recVidEnc, nullptr);
+gst_element_link(recVidEnc, recMux);
 
-// 4. 同步状态
-gst_element_sync_state_with_parent(m_impl->recBin);
+// 4. 链接音频链：audiosrc → audioconv → audioresample → audioenc → muxer
+gst_element_link_many(recAudSrc, recAudConv, recAudResample, recAudEnc, nullptr);
+gst_element_link(recAudEnc, recMux);
 
-// 5. 打开阀门 → 录像开始
-g_object_set(m_impl->recValve, "drop", FALSE, nullptr);
+// 5. 链接 muxer → filesink
+gst_element_link(recMux, recSink);
+
+// 6. 链接阀门到视频链
+GstPad *valveSrc = gst_element_get_static_pad(recValve, "src");
+GstPad *vidSink  = gst_element_get_static_pad(recVidConv, "sink");
+gst_pad_link(valveSrc, vidSink);
+
+// 7. 同步所有元素状态
+gst_element_sync_state_with_parent(recVidConv);
+gst_element_sync_state_with_parent(recVidEnc);
+// ... 每个元素都同步
+
+// 8. 打开阀门 → 录像开始
+g_object_set(recValve, "drop", FALSE, nullptr);
 ```
 
 **停止录像：**
 
 ```cpp
 // 1. 关闭阀门
-g_object_set(m_impl->recValve, "drop", TRUE, nullptr);
+g_object_set(recValve, "drop", TRUE, nullptr);
 
-// 2. 向阀门发送 EOS，让编码器和封装器完成文件写入
-GstPad *sinkPad = gst_element_get_static_pad(m_impl->recValve, "sink");
+// 2. 向录像阀门发送 EOS，让编码器和 muxer 完成文件写入
+GstPad *sinkPad = gst_element_get_static_pad(recValve, "sink");
 gst_pad_send_event(sinkPad, gst_event_new_eos());
 
-// 3. 反链接并移除录像 bin
+// 3. 反链接、设 NULL 状态、逐个从管道移除
 gst_pad_unlink(valveSrc, peer);
-gst_bin_remove(GST_BIN(m_impl->pipeline), m_impl->recBin);
+gst_element_set_state(el, GST_STATE_NULL);
+gst_bin_remove(GST_BIN(pipeline), el);
 ```
 
 **设计要点：**
 
-1. **为什么用 valve 而不是 pad blocking？** valve 元素提供 `drop` 属性，开/关录像只需一行 `g_object_set`，比 pad blocking 简单。
+1. **手动构建代替 bin**：因为需要两条输入链（视频+音频），`gst_parse_bin_from_description` 只能创建单个 sink ghost pad，无法同时接受视频和音频。手动构建每个元素并链接，灵活控制 muxer 的多个输入 pad。
 
-2. **为什么用 avenc_mpeg1video 而不是 x264enc？** ARM 嵌入式板通常没有 x264 硬件编码器（`x264enc` 不存在），libav 的 `avenc_mpeg1video` 作为软编码器始终可用。
+2. **mpegpsmux 的多 pad 特性**：mpegpsmux 通过 request pad 机制接受多路输入。视频编码器链接到第一个 pad，音频编码器链接到第二个 pad，muxer 自动交错写入。
 
-3. **预览与录像隔离**：两个 valve 独立控制，关闭预览阀门不影响录像，切换页面时录像继续运行。
+3. **为什么用 avenc_mp2 编码音频？** MP2 是 MPEG PS 容器的标准音频格式，与 `mpegpsmux` 原生兼容。`avenc_mp2` 由 libav 提供，始终可用。
 
-4. **跨页面录像保持**：离开相机页面时只关闭预览阀门（`pv drop=true`），录像阀门保持打开，回到相机页面时重新打开预览阀门即可。
+4. **为什么用 autoaudiosrc？** 自动选择系统默认音频源（PulseAudio / ALSA），无需硬编码设备名。
 
 #### CameraPage 生命周期
 

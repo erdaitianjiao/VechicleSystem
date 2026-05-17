@@ -7,12 +7,12 @@
 | 模块 | 功能 |
 |------|------|
 | 车辆控制 | 前照灯开关、警报器开关（通过 sysfs 驱动） |
-| 摄像头 | 实时预览、拍照、录像（GStreamer V4L2 管道 + tee 分流） |
-| 音乐播放 | MP3/WAV/FLAC/OGG 播放，进度拖动，音量调节，三种播放模式 |
-| 视频回放 | 播放已录制的视频，支持暂停/恢复 |
+| 摄像头 | 实时预览、拍照、音视频同步录像（GStreamer V4L2 + tee + 双 valve 分流） |
+| 音乐播放 | MP3/WAV/FLAC/OGG 播放，进度拖动，音量调节，顺序/单曲循环/随机播放 |
+| 视频回放 | 播放已录制的音视频文件，支持暂停/恢复 |
 | 照片回放 | 浏览已拍摄的照片 |
 | 世界时钟 | 多时区时钟、倒计时定时器、毫秒级秒表 |
-| Shell 调试 | 内置命令行终端，支持命令历史（↑↓翻历史）、自动补全输入 |
+| Shell 调试 | 内置命令行终端，支持上下键历史（内存 100 条）、方向键编辑 |
 
 ## 架构
 
@@ -42,7 +42,7 @@ VechicleSystem/
 │   │   ├── GalleryPage.h/cpp      照片视频回放页面
 │   │   └── ClockPage.h/cpp        世界时钟 / 定时器 / 秒表
 │   └── shell/
-│       ├── MyShell.h/cpp          Shell 终端（命令历史、raw 模式输入）
+│       ├── MyShell.h/cpp          Shell 终端（raw 模式输入、命令历史）
 │       └── ShellCommands.h/cpp    命令系统（light/beep/camera/music）
 ├── service/                    服务层
 │   └── mediad/                    媒体服务
@@ -116,6 +116,7 @@ build/
 | Interface | IHardwareDevice | 设备统一接口 |
 | Template Method | SysfsDevice | sysfs 读写公共逻辑 |
 | Command | ICommand → CommandDispatcher | Shell 命令路由 |
+| Strategy | MusicPlayer::PlayMode | 播放模式切换 |
 | Pimpl | CameraDevice / MusicPlayer | 隐藏 GStreamer 头文件 |
 
 ## 平台适配
@@ -138,4 +139,4 @@ build/
 | camera | `camera <preview\|photo\|record\|stop> [path]` |
 | music | `music <play\|pause\|resume\|stop\|next\|prev> [path]` |
 
-Shell 支持 `↑↓` 翻历史，最近 100 条命令保留在内存中。
+Shell 支持 `↑↓` 翻历史（最近 100 条保留在内存中）、`←→` 移动光标、Backspace 删除、Ctrl+C 清行、Ctrl+D 退出。
